@@ -107,12 +107,14 @@ def run_a2sb_inference(input_path, output_path, steps, cutoff_hz):
 
     # UpsampleMask computes FFT bin indices via (n_fft * freq / sampling_rate),
     # so the cutoff MUST be in Hz to produce the correct bin boundary.
+    batch_size = os.environ.get("A2SB_PREDICT_BATCH_SIZE", "4")  # lower = less GPU memory
     command = [
         "python3", script_name,
         "-f", input_path,
         "-o", output_path,
         "-n", str(int(steps)),
         "-c", str(int(cutoff_hz)),
+        "-b", batch_size,
     ]
 
     env = os.environ.copy()

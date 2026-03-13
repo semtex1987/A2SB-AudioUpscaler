@@ -61,7 +61,8 @@ def compute_rolloff_freq(audio_file, roll_percent=0.99):
     return rolloff
 
 
-def upsample_one_sample(audio_filename, output_audio_filename, predict_n_steps=50):
+def upsample_one_sample(audio_filename, output_audio_filename, predict_n_steps=50,
+                        cutoff_hz=None, predict_batch_size=4):
 
     assert output_audio_filename != audio_filename, "output filename cannot be input filename"
 
@@ -71,20 +72,31 @@ def upsample_one_sample(audio_filename, output_audio_filename, predict_n_steps=5
         'output_subdir': '.'
     }]
 
-    cutoff_freq = compute_rolloff_freq(audio_filename, roll_percent=0.99)
+    if cutoff_hz is not None:
+        cutoff_freq = int(cutoff_hz)
+    else:
+        cutoff_freq = compute_rolloff_freq(audio_filename, roll_percent=0.99)
     inference_config['data']['transforms_aug'][0]['init_args']['upsample_mask_kwargs'] = {
         'min_cutoff_freq': cutoff_freq,
         'max_cutoff_freq': cutoff_freq
     }
     temporary_yaml_file = save_yaml(inference_config)
 
-    cmd = "cd ../; \
-        python ensembled_inference_api.py predict \
-            -c configs/ensemble_2split_sampling.yaml \
-            -c {} \
-            --model.predict_n_steps={} \
-            --model.output_audio_filename={}; \
-        cd inference/".format(temporary_yaml_file.replace('../', ''), predict_n_steps, output_audio_filename)
+    cmd = (
+        "cd ../; "
+        "python ensembled_inference_api.py predict "
+        "-c configs/ensemble_2split_sampling.yaml "
+        "-c {} "
+        "--model.predict_n_steps={} "
+        "--model.predict_batch_size={} "
+        "--model.output_audio_filename={}; "
+        "cd inference/"
+    ).format(
+        temporary_yaml_file.replace('../', ''),
+        predict_n_steps,
+        predict_batch_size,
+        output_audio_filename,
+    )
     shell_run_cmd(cmd)
     
     os.remove(temporary_yaml_file)
@@ -92,12 +104,20 @@ def upsample_one_sample(audio_filename, output_audio_filename, predict_n_steps=5
 
 def main():
     parser = argparse.ArgumentParser(description='Description of your program')
-    parser.add_argument('-f','--audio_filename', type=str, help='audio filename to be upsampled', required=True)
-    parser.add_argument('-o','--output_audio_filename', type=str, help='path to save upsampled audio', required=True)
-    parser.add_argument('-n','--predict_n_steps', type=int, help='number of sampling steps', default=50)
+    parser.add_argument('-f', '--audio_filename', type=str, help='audio filename to be upsampled', required=True)
+    parser.add_argument('-o', '--output_audio_filename', type=str, help='path to save upsampled audio', required=True)
+    parser.add_argument('-n', '--predict_n_steps', type=int, help='number of sampling steps', default=50)
+    parser.add_argument('-c', '--cutoff_hz', type=int, default=None, help='cutoff frequency in Hz for bandwidth mask (default: 99%% rolloff)')
+    parser.add_argument('-b', '--predict_batch_size', type=int, default=4, help='multidiffusion chunk batch size (lower = less GPU memory, default 4)')
     args = parser.parse_args()
 
-    upsample_one_sample(audio_filename=args.audio_filename, output_audio_filename=args.output_audio_filename, predict_n_steps=args.predict_n_steps)
+    upsample_one_sample(
+        audio_filename=args.audio_filename,
+        output_audio_filename=args.output_audio_filename,
+        predict_n_steps=args.predict_n_steps,
+        cutoff_hz=args.cutoff_hz,
+        predict_batch_size=args.predict_batch_size,
+    )
 
 
 if __name__ == '__main__':

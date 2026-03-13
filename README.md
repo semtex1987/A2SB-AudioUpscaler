@@ -118,7 +118,10 @@ When you run this app on RunPod (or similar), use the image **as built from this
 4. **Container disk**  
    The image includes large checkpoints; set **Container Disk** to at least **20 GB** (or more if you add fine-tuned checkpoints).
 
-5. **Optional**  
+5. **Environment variables (at pod launch)**  
+   RunPod lets you set environment variables when you launch the Pod. Use them to tune behavior without changing code: e.g. **`A2SB_PREDICT_BATCH_SIZE`** (default `4`)—set to `8` or `16` on larger GPUs for faster inference, or `2`/`1` if you hit CUDA OOM. Optional: **`PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512`** to reduce GPU memory fragmentation.
+
+6. **Optional**  
    Mount a volume at `/app/inputs` if you want uploaded files to persist across restarts.
 
 ### If you extend a RunPod base image instead
@@ -149,6 +152,8 @@ docker run -it --gpus all -p 7860:7860 \
 - **Restored audio sounds wrong or only up to ~12 kHz**: The release checkpoints were trained on data with limited high-frequency content. Use the fine-tuning pipeline with full-bandwidth material and the optional checkpoint mount to improve high-end extension.
 - **“No output file” / inference fails**: Usually the inference subprocess failed earlier (e.g. Permission denied on `/debug` or `/app/outputs`). Check the container logs for the Python traceback just above this message. Mount a writable volume to `/app/outputs` and ensure the image entrypoint is used.
 - **vGPU / “Operation not supported”**: Prefer PCIe passthrough for the GPU if possible; otherwise ensure Docker and the NVIDIA stack are configured for your vGPU environment.
+- **CUDA out of memory**: Inference uses a multidiffusion batch size (default 4) to limit peak GPU use. If you still hit OOM, set `A2SB_PREDICT_BATCH_SIZE=2` (or `1`) in the container environment. You can also set `PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512` to reduce fragmentation.
+- **RTX 5090 / "not compatible with the current PyTorch installation"**: The image's PyTorch build may not support sm_120 yet. For full compatibility you may need to rebuild the image with a PyTorch wheel that supports your GPU (see [PyTorch get-started](https://pytorch.org/get-started/locally/)).
 - **Port in use**: Change the host port in `docker-compose.yml` (e.g. `"8080:7860"`).
 
 ## Credits
